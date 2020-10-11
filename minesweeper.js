@@ -9,12 +9,27 @@ function make2dArr(cols, rows) {
 
 var grid;
 var w=20;
+var o=20;
 var cols;
 var rows;
 var totalBee=100;
+let slider;
 var start= false;
+var startgame=false;
+
 function setup() {
   createCanvas(400, 400);
+
+  slider = createSlider(0, 30, 20);
+  slider.position(10, 410);
+  slider.style('width', '80px');
+
+  
+}
+
+
+function initing(){
+
   cols=floor(width/w);
   rows=floor(height/w);
   totalBee=floor(cols*rows/7);
@@ -36,6 +51,7 @@ function setup() {
       grid[i][j]=new cell(i, j, w);
     }
   }
+
   for (var n=0; n<totalBee; n++)
   {
     i=floor(random(cols));
@@ -55,15 +71,28 @@ function setup() {
 }
 
 
+
 function draw() {
-  background(255);
+  background(color(200,255,200));
   
+  if(startgame==true){
   
-  for (var i=0; i<cols; i++) {  
-    for (var j=0; j<rows; j++) {  
-      grid[i][j].show();
-    }
-  }
+   for (var i=0; i<cols; i++) {  
+     for (var j=0; j<rows; j++) {  
+       grid[i][j].show();
+     }
+   }
+ }
+ else{
+  rect(width/2-50,height/2-25,100,50,20, 15, 10, 5);
+  textAlign(CENTER);
+  text('START',width/2,height/2);
+  o =  slider.value();
+  w = width/o;
+  text('No of columns & rows: '+ o +'  move slider to change' ,width/2,height - 25);
+  text('Refresh the page to start again' ,width/2,height - 10);
+  text('vkm',width-20,height-10)
+ }
 }
 
 function gameOver() {
@@ -72,14 +101,17 @@ function gameOver() {
       grid[i][j].revealed=true;
     }
   }
+  text('YOU LOST',width/2,height/2);
 }
 
 function mousePressed() {
   background(255);
+  if(startgame==true)
+  {
   for (var i=0; i<cols; i++) {  
     for (var j=0; j<rows; j++) {  
       if ( grid[i][j].contains(mouseX, mouseY)) { 
-        if(mouseButton === RIGHT ||mouseButton ===CENTER){
+        if(mouseButton === RIGHT ||mouseButton ===CENTER ){
           if(grid[i][j].marker==false){
           grid[i][j].marker=true;}
           else{
@@ -95,4 +127,12 @@ function mousePressed() {
       }
     }
   }
+}
+else{
+  if(width/2-50<mouseX && mouseX<width/2+50 && height/2-25<mouseY && mouseY<height/2+25){
+   startgame=true;
+   removeElements(); 
+   initing();
+  }
+}
 }
