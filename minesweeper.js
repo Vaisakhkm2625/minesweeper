@@ -16,11 +16,14 @@ var totalBee=100;
 let slider;
 var start= false;
 var startgame=false;
+var remaining=20;
+var fail =false;
+var remaininginit =20;
 
 function setup() {
   createCanvas(400, 400);
 
-  slider = createSlider(0, 30, 20);
+  slider = createSlider(3, 30, 20);
   slider.position(10, 410);
   slider.style('width', '80px');
 
@@ -33,16 +36,10 @@ function initing(){
   cols=floor(width/w);
   rows=floor(height/w);
   totalBee=floor(cols*rows/7);
-//  while(!start){
-//  textAlign(CENTER);
-//  fill(0);
-//  text("press any key to start");
-//  if (mouseIsPressed) {
-//   start=true;
-// }
-//}
+
   
-  
+remaining=cols*rows;
+remaininginit = remaining;
   
   
   grid=make2dArr(cols, rows);
@@ -76,11 +73,29 @@ function draw() {
   background(color(200,255,200));
   
   if(startgame==true){
-  
+  remaining  = remaininginit;
    for (var i=0; i<cols; i++) {  
      for (var j=0; j<rows; j++) {  
        grid[i][j].show();
+        if(grid[i][j].revealed ==true)
+        {
+            remaining--;
+        }
      }
+   }
+   if(fail == true){
+    fill(0);
+    textSize(30);
+    text('Game Over',width/2,height/2);
+    textSize(14);
+   }
+   if(remaining <= totalBee && fail == false){
+     gameOver();
+    fill(0);
+    textSize(30);
+     text('you won',width/2,height/2);
+     noLoop();
+     textSize(14);
    }
  }
  else{
@@ -96,12 +111,14 @@ function draw() {
 }
 
 function gameOver() {
+  fail =true;
   for (var i=0; i<cols; i++) {  
     for (var j=0; j<rows; j++) {  
       grid[i][j].revealed=true;
     }
   }
-  text('YOU LOST',width/2,height/2);
+ 
+ 
 }
 
 function mousePressed() {
@@ -136,3 +153,4 @@ else{
   }
 }
 }
+
