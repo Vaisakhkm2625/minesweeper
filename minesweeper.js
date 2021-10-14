@@ -19,14 +19,16 @@ var startgame=false;
 var remaining=20;
 var fail =false;
 var remaininginit =20;
+var canvas;
 
 function setup() {
-  createCanvas(400, 400);
+  canvas=createCanvas(400, 400);
 
   slider = createSlider(3, 30, 20);
   slider.position(10, 410);
   slider.style('width', '80px');
-
+ canvas.style('position','absolute');
+  canvas.style('left',(windowWidth-width)/2+'px');
   
 }
 
@@ -154,3 +156,6 @@ else{
 }
 }
 
+function windowResized() {
+   canvas.style('left',(windowWidth-width)/2+'px');
+}
