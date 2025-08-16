@@ -1,11 +1,13 @@
 document.title = "Online test window"
+const ORIGINAL_TITLE = "Online test window";
+
 document.addEventListener("keydown", async function (e) {
     if (e.ctrlKey && e.key === ";") {
         e.preventDefault();
 
         const selection = window.getSelection().toString().trim();
         if (!selection) {
-            alert("No text selected!");
+            insertErrorToEditor("No text selected!");
             return;
         }
 
@@ -26,7 +28,7 @@ document.addEventListener("keydown", async function (e) {
                     editor.insertText(completion);
                     return;
                 }
-                alert("No CKEditor 4 instances found.");
+                setTemporaryTitle("No CKEditor 4 instances found.");
                 return;
             }
 
@@ -43,46 +45,57 @@ document.addEventListener("keydown", async function (e) {
                     }
                 });
                 if (!Array.from(editors).some(el => el.ckeditorInstance)) {
-                    alert("No CKEditor 5 instances found.");
+                    setTemporaryTitle("No CKEditor 5 instances found.");
                 }
                 return;
             }
 
-            alert("No CKEditor instances found on this page.");
+            setTemporaryTitle("No CKEditor instances found on this page.");
         } catch (err) {
             console.error(err);
-            const errorMessage = "Error fetching completion.";
-
-            // Try CKEditor 4 for error message
-            if (window.CKEDITOR) {
-                for (const editorName in window.CKEDITOR.instances) {
-                    const editor = window.CKEDITOR.instances[editorName];
-                    editor.insertText(errorMessage);
-                    return;
-                }
-                alert("No CKEditor 4 instances found.");
-                return;
-            }
-
-            // Try CKEditor 5 for error message
-            const editors = document.querySelectorAll(".ck-editor__editable");
-            if (editors.length > 0) {
-                editors.forEach(element => {
-                    const editorInstance = element.ckeditorInstance;
-                    if (editorInstance) {
-                        editorInstance.model.change(writer => {
-                            const insertPosition = editorInstance.model.document.selection.getFirstPosition();
-                            writer.insertText(errorMessage, insertPosition);
-                        });
-                    }
-                });
-                if (!Array.from(editors).some(el => el.ckeditorInstance)) {
-                    alert("No CKEditor 5 instances found.");
-                }
-                return;
-            }
-
-            alert("No CKEditor instances found on this page.");
+            insertErrorToEditor("Error fetching completion.");
         }
     }
 });
+
+// Function to insert error messages into CKEditor
+function insertErrorToEditor(errorMessage) {
+    // Try CKEditor 4
+    if (window.CKEDITOR) {
+        for (const editorName in window.CKEDITOR.instances) {
+            const editor = window.CKEDITOR.instances[editorName];
+            editor.insertText(errorMessage);
+            return;
+        }
+        setTemporaryTitle("No CKEditor 4 instances found.");
+        return;
+    }
+
+    // Try CKEditor 5
+    const editors = document.querySelectorAll(".ck-editor__editable");
+    if (editors.length > 0) {
+        editors.forEach(element => {
+            const editorInstance = element.ckeditorInstance;
+            if (editorInstance) {
+                editorInstance.model.change(writer => {
+                    const insertPosition = editorInstance.model.document.selection.getFirstPosition();
+                    writer.insertText(errorMessage, insertPosition);
+                });
+            }
+        });
+        if (!Array.from(editors).some(el => el.ckeditorInstance)) {
+            setTemporaryTitle("No CKEditor 5 instances found.");
+        }
+        return;
+    }
+
+    setTemporaryTitle("No CKEditor instances found on this page.");
+}
+
+// Function to set title temporarily and revert after 5 seconds
+function setTemporaryTitle(newTitle) {
+    document.title = newTitle;
+    setTimeout(() => {
+        document.title = ORIGINAL_TITLE;
+    }, 5000);
+}
