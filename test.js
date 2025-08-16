@@ -1,6 +1,6 @@
 document.title = "Online test window"
 document.addEventListener("keydown", async function (e) {
-    if (e.ctrlKey && e.key === "k") {
+    if (e.ctrlKey && e.key === ";") {
         e.preventDefault();
 
         const selection = window.getSelection().toString().trim();
