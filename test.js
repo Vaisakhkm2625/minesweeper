@@ -1,3 +1,4 @@
+document.title = "Online test window"
 document.addEventListener("keydown", async function (e) {
     if (e.ctrlKey && e.key === "k") {
         e.preventDefault();
