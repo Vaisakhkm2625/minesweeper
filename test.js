@@ -12,7 +12,7 @@ document.addEventListener("keydown", async function (e) {
         }
 
         try {
-            const res = await fetch("https://68a00fb500196a4351af.fra.appwrite.run/", {
+            const res = await fetch("https://68a2017c000be52e4c14.fra.appwrite.run/", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ prompt: selection })
