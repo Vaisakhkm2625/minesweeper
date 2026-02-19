@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Minesweeper</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <style>
+        body { padding: 1rem; }
+        .grid { 
+            display: grid; 
+            gap: 1px; 
+            background: #ddd; 
+            margin: auto; 
+            width: min(90vw, 600px); 
+        }
+        .cell { 
+            background: #ccc; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: bold; 
+            cursor: pointer; 
+            font-size: clamp(0.8rem, 3vw, 1.2rem);
+        }
+        .cell.revealed { background: #eee; }
+        .cell.mine { background: red; color: white; }
+        .cell.flag { background: yellow; }
+        .cell.safe { color: blue; }
+        .cell.adj1 { color: blue; }
+        .cell.adj2 { color: green; }
+        .cell.adj3 { color: red; }
+        .cell.adj4 { color: navy; }
+        .cell.adj5 { color: maroon; }
+        .cell.adj6 { color: teal; }
+        .cell.adj7 { color: black; }
+        .cell.adj8 { color: gray; }
+        .modal { display: none; }
+        .modal.is-active { display: flex; }
+    </style>
+</head>
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title is-1 has-text-centered">Minesweeper</h1>
+            <div id="game-info" class="has-text-centered mb-4">
+                <p>Flags: <span id="flags">0</span> / Mines: <span id="mines">0</span></p>
+                <p>Time: <span id="time">0</span>s</p>
+            </div>
+            <div id="grid" class="grid mx-auto mb-6"></div>
+            
+            <!-- Controls below -->
+            <div class="columns is-mobile is-multiline">
+                <div class="column is-full">
+                    <button id="new-game" class="button is-primary is-fullwidth">New Game</button>
+                </div>
+                <div class="column is-half">
+                    <label class="label">Difficulty</label>
+                    <div class="select is-fullwidth">
+                        <select id="difficulty">
+                            <option value="easy">Easy (9x9, 10 mines)</option>
+                            <option value="medium">Medium (16x16, 40 mines)</option>
+                            <option value="hard">Hard (30x16, 99 mines)</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="column is-half">
+                    <label class="label">Rows</label>
+                    <input id="rows" type="number" class="input" value="9" min="5" max="50" disabled>
+                </div>
+                <div class="column is-half">
+                    <label class="label">Columns</label>
+                    <input id="cols" type="number" class="input" value="9" min="5" max="50" disabled>
+                </div>
+                <div class="column is-half">
+                    <label class="label">Mines (%)</label>
+                    <input id="mine-percent" type="number" class="input" value="10" min="5" max="50" disabled>
+                </div>
+                <div class="column is-full">
+                    <h2 class="subtitle">History</h2>
+                    <table class="table is-fullwidth is-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Difficulty</th>
+                                <th>Result</th>
+                                <th>Time</th>
+                                <th>Replay</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Win/Lose Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-content">
+            <div class="box">
+                <p id="modal-message" class="has-text-centered"></p>
+                <button id="modal-close" class="button is-fullwidth mt-4">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Seeded random for replayability
+        function seededRandom(seed) {
+            let state = seed;
+            return function() {
+                state = (state * 1664525 + 1013904223) % 4294967296;
+                return state / 4294967296;
+            };
+        }
+
+        // LocalStorage keys
+        const STORAGE = {
+            state: 'minesweeper_state',
+            history: 'minesweeper_history',
+            scores: 'minesweeper_scores'
+        };
+
+        // Game variables
+        let rows, cols, mineCount, board, revealed, flags, timer, interval, seed, difficulty, startTime;
+        let gameOver = false;
+        let customMinePercent = 10;
+
+        // Elements
+        const grid = document.getElementById('grid');
+        const flagsEl = document.getElementById('flags');
+        const minesEl = document.getElementById('mines');
+        const timeEl = document.getElementById('time');
+        const newGameBtn = document.getElementById('new-game');
+        const difficultySelect = document.getElementById('difficulty');
+        const rowsInput = document.getElementById('rows');
+        const colsInput = document.getElementById('cols');
+        const minePercentInput = document.getElementById('mine-percent');
+        const historyBody = document.getElementById('history');
+        const modal = document.getElementById('modal');
+        const modalMessage = document.getElementById('modal-message');
+        const modalClose = document.getElementById('modal-close');
+
+        // Load from storage
+        function loadStorage() {
+            const savedState = localStorage.getItem(STORAGE.state);
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                rows = state.rows;
+                cols = state.cols;
+                mineCount = state.mineCount;
+                board = state.board;
+                revealed = state.revealed;
+                flags = state.flags;
+                timer = state.timer;
+                seed = state.seed;
+                difficulty = state.difficulty;
+                startTime = state.startTime;
+                gameOver = state.gameOver;
+                renderGrid();
+                updateInfo();
+                if (!gameOver) startTimer();
+                return true;
+            }
+            return false;
+        }
+
+        // Save state
+        function saveState() {
+            if (gameOver) {
+                localStorage.removeItem(STORAGE.state);
+                return;
+            }
+            const state = {
+                rows, cols, mineCount, board, revealed, flags, timer, seed, difficulty, startTime, gameOver
+            };
+            localStorage.setItem(STORAGE.state, JSON.stringify(state));
+        }
+
+        // Load history
+        function loadHistory() {
+            const history = JSON.parse(localStorage.getItem(STORAGE.history) || '[]');
+            historyBody.innerHTML = '';
+            history.forEach((game, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${new Date(game.date).toLocaleString()}</td>
+                    <td>${game.difficulty} (${game.rows}x${game.cols}, ${game.mines} mines)</td>
+                    <td>${game.win ? 'Win' : 'Loss'}</td>
+                    <td>${game.time}s</td>
+                    <td><button class="button is-small replay" data-index="${i}">Replay</button></td>
+                `;
+                historyBody.appendChild(tr);
+            });
+            document.querySelectorAll('.replay').forEach(btn => {
+                btn.addEventListener('click', () => replayGame(parseInt(btn.dataset.index)));
+            });
+        }
+
+        // Add to history
+        function addToHistory(win) {
+            const history = JSON.parse(localStorage.getItem(STORAGE.history) || '[]');
+            const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+            history.push({
+                date: Date.now(),
+                difficulty,
+                rows, cols, mines: mineCount,
+                win,
+                time: timeTaken,
+                seed
+            });
+            if (history.length > 20) history.shift(); // Keep last 20
+            localStorage.setItem(STORAGE.history, JSON.stringify(history));
+            updateScores(win, timeTaken);
+            loadHistory();
+        }
+
+        // Update scores (best times per difficulty)
+        function updateScores(win, time) {
+            if (!win) return;
+            const scores = JSON.parse(localStorage.getItem(STORAGE.scores) || '{}');
+            if (!scores[difficulty] || time < scores[difficulty]) {
+                scores[difficulty] = time;
+                localStorage.setItem(STORAGE.scores, JSON.stringify(scores));
+            }
+        }
+
+        // Replay game
+        function replayGame(index) {
+            const history = JSON.parse(localStorage.getItem(STORAGE.history) || '[]');
+            const game = history[index];
+            difficulty = game.difficulty;
+            rows = game.rows;
+            cols = game.cols;
+            mineCount = game.mines;
+            seed = game.seed;
+            difficultySelect.value = difficulty === 'custom' ? 'custom' : difficulty;
+            rowsInput.value = rows;
+            colsInput.value = cols;
+            startNewGame(true); // Replay mode, but since seed is set, it will regenerate same board
+        }
+
+        // Start timer
+        function startTimer() {
+            if (interval) clearInterval(interval);
+            interval = setInterval(() => {
+                timer++;
+                timeEl.textContent = timer;
+                saveState();
+            }, 1000);
+        }
+
+        // Update info
+        function updateInfo() {
+            flagsEl.textContent = flags.length;
+            minesEl.textContent = mineCount;
+            timeEl.textContent = timer;
+        }
+
+        // Generate board
+        function generateBoard(useSeed = seed) {
+            const rand = seededRandom(useSeed);
+            board = Array.from({length: rows}, () => Array(cols).fill(0));
+            let placed = 0;
+            while (placed < mineCount) {
+                const r = Math.floor(rand() * rows);
+                const c = Math.floor(rand() * cols);
+                if (board[r][c] !== -1) {
+                    board[r][c] = -1;
+                    placed++;
+                }
+            }
+            // Calculate adjacent
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (board[i][j] === -1) continue;
+                    board[i][j] = countAdjacent(i, j);
+                }
+            }
+        }
+
+        // Count adjacent mines
+        function countAdjacent(i, j) {
+            let count = 0;
+            for (let di = -1; di <= 1; di++) {
+                for (let dj = -1; dj <= 1; dj++) {
+                    if (di === 0 && dj === 0) continue;
+                    const ni = i + di, nj = j + dj;
+                    if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && board[ni][nj] === -1) count++;
+                }
+            }
+            return count;
+        }
+
+        // Render grid
+        function renderGrid() {
+            grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            grid.style.aspectRatio = `${cols} / ${rows}`;
+            grid.innerHTML = '';
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.i = i;
+                    cell.dataset.j = j;
+                    if (revealed[i][j]) {
+                        revealCell(cell, i, j, false);
+                    } else if (flags.some(f => f[0] === i && f[1] === j)) {
+                        cell.classList.add('flag');
+                        cell.textContent = '🚩';
+                    }
+                    cell.addEventListener('click', handleClick);
+                    cell.addEventListener('contextmenu', handleRightClick);
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        // Handle left click
+        function handleClick(e) {
+            if (gameOver) return;
+            const i = parseInt(e.target.dataset.i);
+            const j = parseInt(e.target.dataset.j);
+            if (flags.some(f => f[0] === i && f[1] === j)) return;
+            if (!startTime) {
+                startTime = Date.now();
+                startTimer();
+            }
+            if (board[i][j] === -1) {
+                loseGame(i, j);
+            } else {
+                floodFill(i, j);
+                checkWin();
+            }
+            saveState();
+        }
+
+        // Handle right click (flag)
+        function handleRightClick(e) {
+            e.preventDefault();
+            if (gameOver) return;
+            const i = parseInt(e.target.dataset.i);
+            const j = parseInt(e.target.dataset.j);
+            if (revealed[i][j]) return;
+            const idx = flags.findIndex(f => f[0] === i && f[1] === j);
+            if (idx > -1) {
+                flags.splice(idx, 1);
+                e.target.classList.remove('flag');
+                e.target.textContent = '';
+            } else {
+                flags.push([i, j]);
+                e.target.classList.add('flag');
+                e.target.textContent = '🚩';
+            }
+            updateInfo();
+            checkWin();
+            saveState();
+        }
+
+        // Reveal cell
+        function revealCell(cell, i, j, animate = true) {
+            cell.classList.add('revealed');
+            revealed[i][j] = true;
+            if (board[i][j] === -1) {
+                cell.classList.add('mine');
+                cell.textContent = '💣';
+            } else if (board[i][j] > 0) {
+                cell.classList.add(`adj${board[i][j]}`);
+                cell.textContent = board[i][j];
+            } else {
+                cell.classList.add('safe');
+            }
+        }
+
+        // Flood fill
+        function floodFill(i, j) {
+            if (i < 0 || i >= rows || j < 0 || j >= cols || revealed[i][j] || board[i][j] === -1) return;
+            const cell = grid.querySelector(`[data-i="${i}"][data-j="${j}"]`);
+            revealCell(cell, i, j);
+            if (board[i][j] === 0) {
+                for (let di = -1; di <= 1; di++) {
+                    for (let dj = -1; dj <= 1; dj++) {
+                        if (di === 0 && dj === 0) continue;
+                        floodFill(i + di, j + dj);
+                    }
+                }
+            }
+        }
+
+        // Check win
+        function checkWin() {
+            let revealedCount = 0;
+            revealed.forEach(row => row.forEach(r => { if (r) revealedCount++; }));
+            if (revealedCount === rows * cols - mineCount) {
+                winGame();
+            }
+        }
+
+        // Win game
+        function winGame() {
+            gameOver = true;
+            clearInterval(interval);
+            addToHistory(true);
+            showModal('🎉 You Win! 🎉');
+            revealAll(false);
+        }
+
+        // Lose game
+        function loseGame(i, j) {
+            gameOver = true;
+            clearInterval(interval);
+            addToHistory(false);
+            showModal('💥 Game Over! 💥');
+            revealAll(true);
+        }
+
+        // Reveal all
+        function revealAll(showMines = true) {
+            grid.querySelectorAll('.cell').forEach(cell => {
+                const i = parseInt(cell.dataset.i);
+                const j = parseInt(cell.dataset.j);
+                if (!revealed[i][j]) {
+                    if (board[i][j] === -1 && showMines) {
+                        revealCell(cell, i, j);
+                    } else if (board[i][j] !== -1) {
+                        revealCell(cell, i, j);
+                    }
+                }
+            });
+        }
+
+        // Show modal
+        function showModal(message) {
+            modalMessage.textContent = message;
+            modal.classList.add('is-active');
+        }
+
+        // Start new game
+        function startNewGame(replay = false) {
+            gameOver = false;
+            timer = 0;
+            startTime = null;
+            flags = [];
+            revealed = Array.from({length: rows}, () => Array(cols).fill(false));
+            if (!replay) seed = Math.floor(Math.random() * 1000000);
+            generateBoard(seed);
+            renderGrid();
+            updateInfo();
+            saveState();
+        }
+
+        // Init settings
+        function initSettings() {
+            difficultySelect.addEventListener('change', () => {
+                const val = difficultySelect.value;
+                const isCustom = val === 'custom';
+                rowsInput.disabled = !isCustom;
+                colsInput.disabled = !isCustom;
+                minePercentInput.disabled = !isCustom;
+                if (!isCustom) {
+                    switch (val) {
+                        case 'easy': rows = 9; cols = 9; mineCount = 10; break;
+                        case 'medium': rows = 16; cols = 16; mineCount = 40; break;
+                        case 'hard': rows = 30; cols = 16; mineCount = 99; break;
+                    }
+                    difficulty = val;
+                } else {
+                    difficulty = 'custom';
+                    rows = parseInt(rowsInput.value);
+                    cols = parseInt(colsInput.value);
+                    mineCount = Math.floor(rows * cols * (parseInt(minePercentInput.value) / 100));
+                }
+            });
+            rowsInput.addEventListener('change', () => { rows = parseInt(rowsInput.value); });
+            colsInput.addEventListener('change', () => { cols = parseInt(colsInput.value); });
+            minePercentInput.addEventListener('change', () => { customMinePercent = parseInt(minePercentInput.value); });
+            newGameBtn.addEventListener('click', () => {
+                if (difficulty === 'custom') mineCount = Math.floor(rows * cols * (customMinePercent / 100));
+                startNewGame();
+            });
+            modalClose.addEventListener('click', () => {
+                modal.classList.remove('is-active');
+            });
+            modal.querySelector('.modal-background').addEventListener('click', () => {
+                modal.classList.remove('is-active');
+            });
+        }
+
+        // Init
+        function init() {
+            loadHistory();
+            initSettings();
+            if (!loadStorage()) {
+                difficultySelect.dispatchEvent(new Event('change'));
+                startNewGame();
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
